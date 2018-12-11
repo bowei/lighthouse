@@ -42,7 +42,8 @@ func TestTCPEncode(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			pkt := tc.tcp.Encode()
+			pkt := make([]byte, TCPHeaderSize)
+			tc.tcp.Encode(pkt)
 			if !reflect.DeepEqual(tc.want, pkt) {
 				t.Errorf("tcp.Encode() = %v, want %v; tcp = %+v", pkt, tc.want, tc.tcp)
 			}
