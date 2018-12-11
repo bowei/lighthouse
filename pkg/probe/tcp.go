@@ -18,6 +18,7 @@ package probe
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 )
 
@@ -26,6 +27,10 @@ type tcpFlags struct {
 }
 
 const TCPHeaderSize = 20
+
+func newTCPHeader() *tcpHeader {
+	return &tcpHeader{dataOffset: 5}
+}
 
 type tcpHeader struct {
 	srcPort    uint16 // 0
@@ -68,29 +73,60 @@ func (t *tcpHeader) Encode(pkt []byte, src, dest net.IP, data []byte) {
 	encoder.PutUint16(pkt[14:], t.windowSize)
 	encoder.PutUint16(pkt[18:], t.urgentPtr)
 	// Checksum is last (compute with pseudoheader and zeros).
-	encoder.PutUint16(pkt[16:], tcpChecksum(src, dest, data, t))
+	encoder.PutUint16(pkt[16:], checksumTCP(src, dest, pkt[:20], data))
 }
 
 const tcpProtoNum = 6
 
-func tcpChecksum(src, dest net.IP, data []byte, t *tcpHeader) uint16 {
-	var sum uint32
-	src4, dest4 := src.To4(), dest.To4()
-	sum += uint32(src4[0]) + uint32(src4[1])<<8
-	sum += uint32(src4[2]) + uint32(src4[3])<<8
-	sum += uint32(dest4[0]) + uint32(dest4[1])<<8
-	sum += uint32(dest4[2]) + uint32(dest4[3])<<8
-	sum += uint32(tcpProtoNum) << 8
-	var tcpLength [2]byte
-	binary.BigEndian.PutUint16(tcpLength[:], uint16(len(data)))
-	sum += uint32(tcpLength[0]) + uint32(tcpLength[1])<<8
+func checksumTCP(src, dest net.IP, tcpHeader, data []byte) uint16 {
+	chk := &tcpChecksumer{}
+	// Encode pseudoheader.
+	chk.add(src.To4())
+	chk.add(dest.To4())
+	var pseudoHeader [4]byte
+	enc := binary.BigEndian
+	enc.PutUint16(pseudoHeader[:2], tcpProtoNum<<8)
+	enc.PutUint16(pseudoHeader[2:], uint16(len(data)))
+	chk.add(pseudoHeader[:])
 
-	for i := 0; len(data)-i > 1; i += 2 {
-		sum += uint32(data[i]) + uint32(data[i+1])<<8
-	}
-	if len(data)%2 > 0 {
-		sum += uint32(data[len(data)-1]) << 8
-	}
+	chk.add(tcpHeader)
+	chk.add(data)
 
-	return ^(uint16(sum&0xff) + uint16(sum>>16))
+	return chk.finalize()
+}
+
+type tcpChecksumer struct {
+	sum     uint32
+	oddByte byte
+	length  int
+}
+
+func (c *tcpChecksumer) finalize() uint16 {
+	ret := c.sum
+	if c.length%2 > 0 {
+		ret += uint32(c.oddByte)
+	}
+	for ret>>16 > 0 {
+		ret = ret&0xffff + ret>>16
+	}
+	return ^uint16(ret)
+}
+
+func (c *tcpChecksumer) add(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	haveOddByte := c.length%2 > 0
+	c.length += len(data)
+	if haveOddByte {
+		data = append([]byte{c.oddByte}, data...)
+	}
+	fmt.Printf("DATA %v\n", data)
+	for i := 0; i < len(data)-1; i += 2 {
+		c.sum += uint32(data[0]) + uint32(data[1])<<8
+	}
+	if c.length%2 > 0 {
+		fmt.Printf("updating oddByte\n")
+		c.oddByte = data[len(data)-1]
+	}
 }
