@@ -60,29 +60,19 @@ func (t *tcpHeader) Encode(pkt []byte, src, dest net.IP, data []byte) int {
 	}
 
 	var flags uint8
-	if t.flags.cwr {
-		flags |= 1 << 7
-	}
-	if t.flags.ece {
-		flags |= 1 << 6
-	}
-	if t.flags.urg {
-		flags |= 1 << 5
-	}
-	if t.flags.ack {
-		flags |= 1 << 4
-	}
-	if t.flags.psh {
-		flags |= 1 << 3
-	}
-	if t.flags.rst {
-		flags |= 1 << 2
-	}
-	if t.flags.syn {
-		flags |= 1 << 1
-	}
-	if t.flags.fin {
-		flags |= 1 << 0
+	for offset, f := range []bool{
+		t.flags.fin,
+		t.flags.syn,
+		t.flags.rst,
+		t.flags.psh,
+		t.flags.ack,
+		t.flags.urg,
+		t.flags.ece,
+		t.flags.cwr,
+	} {
+		if f {
+			flags |= 1 << uint(offset)
+		}
 	}
 	pkt[13] = flags
 
