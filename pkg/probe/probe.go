@@ -27,7 +27,7 @@ func SendTCP() {
 	if err != nil {
 		panic(err)
 	}
-	tcp := &tcpHeader{
+	tcp := &tcpPacket{
 		srcPort:  80,
 		destPort: 8080,
 		flags:    tcpFlags{syn: true},

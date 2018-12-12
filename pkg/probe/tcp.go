@@ -30,7 +30,7 @@ type tcpFlags struct {
 	ns, cwr, ece, urg, ack, psh, rst, syn, fin bool
 }
 
-type tcpHeader struct {
+type tcpPacket struct {
 	srcPort    uint16 // 0
 	destPort   uint16 // 2
 	seq        uint32 // 4
@@ -41,7 +41,7 @@ type tcpHeader struct {
 	urgentPtr  uint16   // 18
 }
 
-func (t *tcpHeader) Encode(pkt []byte, src, dest net.IP, data []byte) int {
+func (t *tcpPacket) Encode(pkt []byte, src, dest net.IP, data []byte) int {
 	encoder := binary.BigEndian
 	encoder.PutUint16(pkt, t.srcPort)
 	encoder.PutUint16(pkt[2:], t.destPort)

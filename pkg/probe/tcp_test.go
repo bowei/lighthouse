@@ -30,13 +30,13 @@ func TestTCPEncode(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc string
-		tcp  tcpHeader
+		tcp  tcpPacket
 		data []byte
 		want []byte
 	}{
 		{
 			desc: "localhost",
-			tcp: tcpHeader{
+			tcp: tcpPacket{
 				srcPort:  80,
 				destPort: 8080,
 				seq:      0x1,
