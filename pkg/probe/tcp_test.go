@@ -17,7 +17,6 @@ limitations under the License.
 package probe
 
 import (
-	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -26,8 +25,8 @@ import (
 func TestTCPEncode(t *testing.T) {
 	t.Parallel()
 
-	src := net.ParseIP("1.1.1.1")
-	dest := net.ParseIP("2.2.2.2")
+	src := net.ParseIP("127.0.0.1")
+	dest := net.ParseIP("127.0.0.1")
 
 	for _, tc := range []struct {
 		desc string
@@ -38,23 +37,21 @@ func TestTCPEncode(t *testing.T) {
 		{
 			desc: "localhost",
 			tcp: tcpHeader{
-				srcPort:    80,
-				destPort:   81,
-				seq:        0x1,
-				ack:        0x2,
-				windowSize: 0x3,
-				flags: tcpFlags{
-					syn: true,
-				},
+				srcPort:  80,
+				destPort: 8080,
+				seq:      0x1,
+				flags:    tcpFlags{syn: true},
 			},
 			want: []byte{
-				0, 80, 0, 81, 0, 0, 0, 1, 0, 0,
-				0, 2, 64, 0, 0, 3, 217, 234, 0, 0,
+				0x00, 0x50, 0x1f, 0x90, 0x00,
+				0x00, 0x00, 0x01, 0x00, 0x00,
+				0x00, 0x00, 0x50, 0x02, 0x00,
+				0x00, 0x91, 0xff, 0x00, 0x00,
 			},
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			pkt := make([]byte, TCPHeaderSize)
+			pkt := make([]byte, tcpHeaderSize)
 			tc.tcp.Encode(pkt, src, dest, tc.data)
 			if !reflect.DeepEqual(tc.want, pkt) {
 				t.Errorf("tcp.Encode() = %v, want %v; tcp = %+v, data = %v", pkt, tc.want, tc.tcp, tc.data)
@@ -101,9 +98,24 @@ func TestTCPChecksummer(t *testing.T) {
 			data: [][]byte{[]byte{0x55, 0x88}, []byte{0x99}},
 			want: 0x7711,
 		},
+		{
+			desc: "simple packet",
+			data: [][]byte{
+				[]byte{
+					0x7f, 0x00, 0x00, 0x01, // 127.0.0.1
+					0x7f, 0x00, 0x00, 0x01, // 127.0.0.1
+					0x00, 0x06, // TCP proto 6
+					0x00, 0x14, // Size = 20 bytes
+					0x00, 0x50, 0x1f, 0x90, 0x00,
+					0x00, 0x00, 0x01, 0x00, 0x00,
+					0x00, 0x00, 0x50, 0x02, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00,
+				},
+			},
+			want: 0xff91,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			fmt.Println("---")
 			c := &tcpChecksumer{}
 			for _, b := range tc.data {
 				c.add(b)

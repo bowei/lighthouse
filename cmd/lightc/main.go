@@ -16,6 +16,10 @@ limitations under the License.
 
 package main
 
-func main() {
+import (
+	"github.com/bowei/lighthouse/pkg/probe"
+)
 
+func main() {
+	probe.SendTCP()
 }

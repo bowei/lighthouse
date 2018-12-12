@@ -18,18 +18,16 @@ package probe
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
+)
+
+const (
+	tcpHeaderSize = 20
+	tcpProtoNum   = 6
 )
 
 type tcpFlags struct {
 	ns, cwr, ece, urg, ack, psh, rst, syn, fin bool
-}
-
-const TCPHeaderSize = 20
-
-func newTCPHeader() *tcpHeader {
-	return &tcpHeader{dataOffset: 5}
 }
 
 type tcpHeader struct {
@@ -43,52 +41,74 @@ type tcpHeader struct {
 	urgentPtr  uint16   // 18
 }
 
-func (t *tcpHeader) Encode(pkt []byte, src, dest net.IP, data []byte) {
+func (t *tcpHeader) Encode(pkt []byte, src, dest net.IP, data []byte) int {
 	encoder := binary.BigEndian
 	encoder.PutUint16(pkt, t.srcPort)
 	encoder.PutUint16(pkt[2:], t.destPort)
 	encoder.PutUint32(pkt[4:], t.seq)
 	encoder.PutUint32(pkt[8:], t.ack)
 
-	flagAt := func(b bool, offset uint) uint16 {
-		if !b {
-			return 0
-		}
-		return 1 << offset
+	if t.dataOffset == 0 {
+		// If nil-initialized, then assume standard size (5*32 bits).
+		pkt[12] = 5 << 4
+	} else {
+		pkt[12] = uint8(t.dataOffset&0xf) << 4
 	}
 
-	var flags uint16
-	flags |= t.dataOffset & 0x3
-	// Reserved (3 bits).
-	flags |= flagAt(t.flags.ns, 7)
-	flags |= flagAt(t.flags.cwr, 8)
-	flags |= flagAt(t.flags.ece, 9)
-	flags |= flagAt(t.flags.urg, 10)
-	flags |= flagAt(t.flags.ack, 11)
-	flags |= flagAt(t.flags.psh, 12)
-	flags |= flagAt(t.flags.rst, 13)
-	flags |= flagAt(t.flags.syn, 14)
-	flags |= flagAt(t.flags.fin, 15)
-	encoder.PutUint16(pkt[12:], flags)
+	if t.flags.ns {
+		pkt[12] |= 1 << 7
+	}
+
+	var flags uint8
+	if t.flags.cwr {
+		flags |= 1 << 7
+	}
+	if t.flags.ece {
+		flags |= 1 << 6
+	}
+	if t.flags.urg {
+		flags |= 1 << 5
+	}
+	if t.flags.ack {
+		flags |= 1 << 4
+	}
+	if t.flags.psh {
+		flags |= 1 << 3
+	}
+	if t.flags.rst {
+		flags |= 1 << 2
+	}
+	if t.flags.syn {
+		flags |= 1 << 1
+	}
+	if t.flags.fin {
+		flags |= 1 << 0
+	}
+	pkt[13] = flags
+
 	encoder.PutUint16(pkt[14:], t.windowSize)
 	encoder.PutUint16(pkt[18:], t.urgentPtr)
 	// Checksum is last (compute with pseudoheader and zeros).
-	encoder.PutUint16(pkt[16:], checksumTCP(src, dest, pkt[:20], data))
-}
+	checksum := checksumTCP(src, dest, pkt[:tcpHeaderSize], data)
+	pkt[16] = uint8(checksum & 0xff)
+	pkt[17] = uint8(checksum >> 8)
 
-const tcpProtoNum = 6
+	copy(pkt[tcpHeaderSize:], data)
+
+	return tcpHeaderSize + len(data)
+}
 
 func checksumTCP(src, dest net.IP, tcpHeader, data []byte) uint16 {
 	chk := &tcpChecksumer{}
+
 	// Encode pseudoheader.
 	chk.add(src.To4())
 	chk.add(dest.To4())
-	var pseudoHeader [4]byte
-	enc := binary.BigEndian
-	enc.PutUint16(pseudoHeader[:2], tcpProtoNum<<8)
-	enc.PutUint16(pseudoHeader[2:], uint16(len(data)))
-	chk.add(pseudoHeader[:])
 
+	var pseudoHeader [4]byte
+	pseudoHeader[1] = tcpProtoNum
+	binary.BigEndian.PutUint16(pseudoHeader[2:], uint16(len(data)+len(tcpHeader)))
+	chk.add(pseudoHeader[:])
 	chk.add(tcpHeader)
 	chk.add(data)
 
@@ -121,12 +141,10 @@ func (c *tcpChecksumer) add(data []byte) {
 	if haveOddByte {
 		data = append([]byte{c.oddByte}, data...)
 	}
-	fmt.Printf("DATA %v\n", data)
 	for i := 0; i < len(data)-1; i += 2 {
-		c.sum += uint32(data[0]) + uint32(data[1])<<8
+		c.sum += uint32(data[i]) + uint32(data[i+1])<<8
 	}
 	if c.length%2 > 0 {
-		fmt.Printf("updating oddByte\n")
 		c.oddByte = data[len(data)-1]
 	}
 }
