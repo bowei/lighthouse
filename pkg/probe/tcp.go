@@ -41,7 +41,7 @@ type tcpPacket struct {
 	urgentPtr  uint16   // 18
 }
 
-func (t *tcpPacket) Encode(pkt []byte, src, dest net.IP, data []byte) int {
+func (t *tcpPacket) encode(pkt []byte, src, dest net.IP, data []byte) int {
 	encoder := binary.BigEndian
 	encoder.PutUint16(pkt, t.srcPort)
 	encoder.PutUint16(pkt[2:], t.destPort)

@@ -17,33 +17,38 @@ limitations under the License.
 package probe
 
 import (
-	"fmt"
 	"net"
+
+	"github.com/golang/glog"
 )
 
-func SendTCP() {
-	netaddr, _ := net.ResolveIPAddr("ip4", "127.0.0.1")
-	conn, err := net.DialIP("ip4:tcp", nil, netaddr)
+// SendTCP TODO
+func SendTCP(src string, srcPort int, dest string, destPort int, magic string) error {
+	srcAddr, err := net.ResolveIPAddr("ip4", src)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	destAddr, err := net.ResolveIPAddr("ip4", dest)
+	if err != nil {
+		return err
+	}
+	conn, err := net.DialIP("ip4:tcp", srcAddr, destAddr)
+	if err != nil {
+		return err
+	}
+
 	tcp := &tcpPacket{
-		srcPort:  80,
-		destPort: 8080,
+		srcPort:  uint16(srcPort),
+		destPort: uint16(destPort),
 		flags:    tcpFlags{syn: true},
 		seq:      1,
 	}
 
 	pkt := make([]byte, 1024)
-	len := tcp.Encode(pkt, net.ParseIP("127.0.0.1"), net.ParseIP("127.0.0.1"), []byte{})
-	fmt.Printf("Encode(...) = %v\n", len)
-
-	fmt.Printf("pkt = %v\n", pkt[:len])
-	fmt.Printf("[")
-	for _, x := range pkt[:len] {
-		fmt.Printf("%02x ", x)
-	}
-	fmt.Printf("]\n")
+	len := tcp.encode(pkt, net.ParseIP(src), net.ParseIP(dest), []byte{})
+	glog.V(2).Infof("Encoded TCP (%d bytes): %v", len, pkt[:len])
 	len, err = conn.Write(pkt[:len])
-	fmt.Printf("%v, %v\n", len, err)
+	glog.V(2).Infof("conn.Write(pkt) = %d, %v", len, err)
+
+	return err
 }

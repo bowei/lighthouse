@@ -17,9 +17,9 @@ limitations under the License.
 package main
 
 import (
-	"github.com/bowei/lighthouse/pkg/probe"
+	"github.com/bowei/lighthouse/cmd/lh/app"
 )
 
 func main() {
-	probe.SendTCP()
+	app.Run()
 }
