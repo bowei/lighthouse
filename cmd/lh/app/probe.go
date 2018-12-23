@@ -37,20 +37,19 @@ var (
 )
 
 func init() {
-	allSubcommands = append(allSubcommands, &probeCommand{})
+	allSubcommands["probe"] = &probeCommand{}
 }
 
 type probeCommand struct{}
 
-func (c *probeCommand) name() string {
-	return "probe"
+func (c *probeCommand) flags() *flag.FlagSet {
+	return probeFlagSet
 }
 
-func (c *probeCommand) run(args []string) int {
-	probeFlagSet.Parse(args)
-	glog.V(2).Infof("runProbe endpoint=%s magic=%s", *probeFlags.endpoint, *probeFlags.magic)
+func (c *probeCommand) run() int {
+	glog.Errorf("runProbe endpoint=%s magic=%s", *probeFlags.endpoint, *probeFlags.magic)
 	err := probe.SendTCP("127.0.0.1", 3000, *probeFlags.endpoint, *probeFlags.port, *probeFlags.magic)
-	glog.V(2).Infof("probe.SendTCP = %v", err)
+	glog.Errorf("probe.SendTCP = %v", err)
 
 	return 0
 }

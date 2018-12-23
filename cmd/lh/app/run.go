@@ -20,31 +20,50 @@ import (
 	"flag"
 	"fmt"
 	"os"
-
-	"github.com/golang/glog"
+	"sort"
 )
 
 type subcommand interface {
-	name() string
-	run(args []string) int
+	flags() *flag.FlagSet
+	run() int
 }
 
-var allSubcommands []subcommand
+var allSubcommands = map[string]subcommand{}
 
 // Run the app.
 func Run() {
-	if flag.NArg() > len(os.Args) {
+	if len(os.Args) < 2 {
 		fmt.Println("Need a subcommand")
-	}
-	flag.Parse()
-	cmd := os.Args[flag.NArg()]
-	rest := os.Args[flag.NArg()+1:]
-	glog.V(2).Infof("cmd=%q rest=%v", cmd, rest)
-	for _, sc := range allSubcommands {
-		if sc.name() == cmd {
-			os.Exit(sc.run(rest))
-		}
+		os.Exit(1)
 	}
 
-	fmt.Printf("Invalid subcommand %q\n", cmd)
+	cmd := os.Args[1]
+	var (
+		sc subcommand
+		ok bool
+	)
+	if sc, ok = allSubcommands[cmd]; !ok {
+		fmt.Printf("Invalid subcommand %q. Available subcommands:\n", cmd)
+		var names []string
+		for name := range allSubcommands {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			fmt.Printf("  %s\n", name)
+		}
+		os.Exit(1)
+	}
+
+	f := sc.flags()
+	mergeGlobalFlags(f)
+
+	args := os.Args[2:]
+	if err := f.Parse(args); err != nil {
+		f.Usage()
+		os.Exit(1)
+	}
+	flag.Parse()
+
+	os.Exit(sc.run())
 }
